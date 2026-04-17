@@ -2,7 +2,7 @@
 "use client";
 
 import Link from "next/link";
-import { AuthNavigation } from "@/components/AuthNavigation/AuthNavigation"; // ← добавить импорт
+import  AuthNavigation  from "@/components/AuthNavigation/AuthNavigation"; // ← добавить импорт
 import css from "./Header.module.css";
 
 export default function Header() {

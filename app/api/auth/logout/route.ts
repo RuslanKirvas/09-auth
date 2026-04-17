@@ -1,39 +1,35 @@
-
-
 import { NextResponse } from 'next/server';
-import axios from 'axios';
+import { api } from '../../api';
+import { cookies } from 'next/headers';
+import { isAxiosError } from 'axios';
+import { logErrorResponse } from '@/app/_utils/utils';
 
 export async function POST() {
   try {
-    // Отправляем запрос на внешний бекенд
-    await axios.post(
-      'https://notehub-api.goit.study/auth/logout',
-      {},
-      {
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        withCredentials: true,
-      }
-    );
-    
-    const response = NextResponse.json({ message: 'Logged out' }, { status: 200 });
-    
-  
-    response.cookies.delete('accessToken');
-    response.cookies.delete('refreshToken');
-    response.cookies.delete('session');
-    
-    return response;
-  } catch (error) {
-    console.error('Logout error:', error);
-    
+    const cookieStore = await cookies();
 
-    const response = NextResponse.json({ message: 'Logged out locally' }, { status: 200 });
-    response.cookies.delete('accessToken');
-    response.cookies.delete('refreshToken');
-    response.cookies.delete('session');
-    
-    return response;
+    const accessToken = cookieStore.get('accessToken')?.value;
+    const refreshToken = cookieStore.get('refreshToken')?.value;
+
+    await api.post('auth/logout', null, {
+      headers: {
+        Cookie: `accessToken=${accessToken}; refreshToken=${refreshToken}`,
+      },
+    });
+
+    cookieStore.delete('accessToken');
+    cookieStore.delete('refreshToken');
+
+    return NextResponse.json({ message: 'Logged out successfully' }, { status: 200 });
+  } catch (error) {
+    if (isAxiosError(error)) {
+      logErrorResponse(error.response?.data);
+      return NextResponse.json(
+        { error: error.message, response: error.response?.data },
+        { status: error.status }
+      );
+    }
+    logErrorResponse({ message: (error as Error).message });
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

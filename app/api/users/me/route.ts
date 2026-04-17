@@ -1,52 +1,54 @@
-// import { NextResponse } from 'next/server';
-// import { cookies } from 'next/headers';
-// import axios from 'axios';
-// import { AxiosError } from 'axios';
-
-// export async function GET() {
-//   const cookieStore = await cookies();
-//   const sessionCookie = cookieStore.get('session');
-
-//   if (!sessionCookie) {
-//     return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
-//   }
-
-//   try {
-//     const response = await axios.get('https://notehub-api.goit.study/users/me', {
-//       headers: { Cookie: `${sessionCookie.name}=${sessionCookie.value}` },
-//     });
-//     return NextResponse.json(response.data, { status: 200 });
-//   } catch (error) {
-//     const axiosError = error as AxiosError;
-//     const errorData = axiosError.response?.data as { message?: string };
-//     return NextResponse.json(
-//       { message: errorData?.message || 'Failed to fetch user' },
-//       { status: axiosError.response?.status || 500 }
-//     );
-//   }
-// }
+export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
+import { api } from '../../api';
 import { cookies } from 'next/headers';
-import axios from 'axios';
+import { logErrorResponse } from '@/app/_utils/utils';
+import { isAxiosError } from 'axios';
 
 export async function GET() {
-  const cookieStore = await cookies();
-  const accessToken = cookieStore.get('accessToken');
-  
-  if (!accessToken) {
-    return NextResponse.json({ message: 'Unauthorized' }, { status: 401 });
-  }
-  
   try {
-    const response = await axios.get('https://notehub-api.goit.study/users/me', {
+    const cookieStore = await cookies();
+
+    const res = await api.get('/users/me', {
       headers: {
-        Cookie: `${accessToken.name}=${accessToken.value}`,
-        'Content-Type': 'application/json',
+        Cookie: cookieStore.toString(),
       },
     });
-    return NextResponse.json(response.data, { status: 200 });
-  } catch  {
-    return NextResponse.json({ message: 'Failed to fetch user' }, { status: 401 });
+    return NextResponse.json(res.data, { status: res.status });
+  } catch (error) {
+    if (isAxiosError(error)) {
+      logErrorResponse(error.response?.data);
+      return NextResponse.json(
+        { error: error.message, response: error.response?.data },
+        { status: error.status }
+      );
+    }
+    logErrorResponse({ message: (error as Error).message });
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+  }
+}
+
+export async function PATCH(request: Request) {
+  try {
+    const cookieStore = await cookies();
+    const body = await request.json();
+
+    const res = await api.patch('/users/me', body, {
+      headers: {
+        Cookie: cookieStore.toString(),
+      },
+    });
+    return NextResponse.json(res.data, { status: res.status });
+  } catch (error) {
+    if (isAxiosError(error)) {
+      logErrorResponse(error.response?.data);
+      return NextResponse.json(
+        { error: error.message, response: error.response?.data },
+        { status: error.status }
+      );
+    }
+    logErrorResponse({ message: (error as Error).message });
+    return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
   }
 }

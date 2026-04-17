@@ -5,6 +5,7 @@ import { api } from './api';
 import { cookies } from 'next/headers';
 import { Note } from '@/types/note';
 import { User } from '@/types/user';
+import { AxiosResponse } from 'axios';
 
 export interface NotesResponse {
   notes: Note[];
@@ -36,15 +37,14 @@ export const getMe = async (): Promise<User> => {
   const cookieStore = await cookies();
   const cookieString = cookieStore.toString();
   
-  
-  
   const response = await api.get('/users/me', {
     headers: cookieString ? { Cookie: cookieString } : {},
   });
   return response.data;
 };
 
-export const checkSession = async (): Promise<User | null> => {
+// Функція checkSession має повертати повний об'єкт відповіді Axios
+export const checkSession = async (): Promise<AxiosResponse<User | null> | null> => {
   try {
     const cookieStore = await cookies();
     const cookieString = cookieStore.toString();
@@ -52,7 +52,7 @@ export const checkSession = async (): Promise<User | null> => {
     const response = await api.get('/auth/session', {
       headers: cookieString ? { Cookie: cookieString } : {},
     });
-    return response.data;
+    return response;
   } catch {
     return null;
   }
