@@ -1,4 +1,4 @@
-import NotesClient from './Notes.client';
+import NotesClient from './filter/[...slug]/Notes.client';
 export default function NotesPage() {
   return <NotesClient />;
 }
