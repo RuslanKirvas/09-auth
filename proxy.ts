@@ -29,30 +29,37 @@ export async function proxy(request: NextRequest) {
   const isPublicRoute = publicRoutes.some(route => pathname === route || pathname.startsWith(route));
   const isAuthRoute = authRoutes.some(route => pathname === route || pathname.startsWith(route));
   
-  // Використовуємо cookies() з next/headers
   const cookieStore = await cookies();
-  const accessToken = cookieStore.get('accessToken')?.value;
-  const refreshToken = cookieStore.get('refreshToken')?.value;
+  let accessToken = cookieStore.get('accessToken')?.value;
+  let refreshToken = cookieStore.get('refreshToken')?.value;
+  
+  // Поновлення сесії для будь-якого маршруту (не тільки приватного)
+  // якщо немає accessToken, але є refreshToken
+  if (!accessToken && refreshToken) {
+    const newTokens = await refreshSession(refreshToken);
+    if (newTokens) {
+      accessToken = newTokens.accessToken;
+      refreshToken = newTokens.refreshToken;
+      const response = NextResponse.next();
+      response.cookies.set('accessToken', accessToken, { httpOnly: true, secure: true, sameSite: 'lax' });
+      response.cookies.set('refreshToken', refreshToken, { httpOnly: true, secure: true, sameSite: 'lax' });
+      return response;
+    }
+  }
   
   // Якщо є accessToken, але користувач на публічному маршруті
   if (accessToken && isPublicRoute) {
-    return NextResponse.redirect(new URL('/', request.url));  // ← редірект на /, а не на /profile
-  }
-  
-  // Якщо немає accessToken, але є refreshToken — спроба поновлення
-  if (!accessToken && refreshToken && isAuthRoute) {
-    const newTokens = await refreshSession(refreshToken);
-    if (newTokens) {
-      const response = NextResponse.next();
-      response.cookies.set('accessToken', newTokens.accessToken, { httpOnly: true, secure: true, sameSite: 'lax' });
-      response.cookies.set('refreshToken', newTokens.refreshToken, { httpOnly: true, secure: true, sameSite: 'lax' });
-      return response;
-    }
+    return NextResponse.redirect(new URL('/', request.url));
   }
   
   // Якщо немає токенів і маршрут приватний
   if (!accessToken && !refreshToken && isAuthRoute) {
     return NextResponse.redirect(new URL('/sign-in', request.url));
+  }
+  
+  // Явний дозвіл для неавторизованих користувачів на публічні маршрути
+  if (!accessToken && !refreshToken && isPublicRoute) {
+    return NextResponse.next();
   }
   
   return NextResponse.next();
