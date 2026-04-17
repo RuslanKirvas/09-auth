@@ -1,9 +1,8 @@
 
 
 
-
 import { NextRequest, NextResponse } from 'next/server';
-
+import { cookies } from 'next/headers';
 import { api } from './app/api/api';
 
 const publicRoutes = ['/sign-in', '/sign-up'];
@@ -30,13 +29,17 @@ export async function proxy(request: NextRequest) {
   const isPublicRoute = publicRoutes.some(route => pathname === route || pathname.startsWith(route));
   const isAuthRoute = authRoutes.some(route => pathname === route || pathname.startsWith(route));
   
-  const accessToken = request.cookies.get('accessToken')?.value;
-  const refreshToken = request.cookies.get('refreshToken')?.value;
+  // Використовуємо cookies() з next/headers
+  const cookieStore = await cookies();
+  const accessToken = cookieStore.get('accessToken')?.value;
+  const refreshToken = cookieStore.get('refreshToken')?.value;
   
+  // Якщо є accessToken, але користувач на публічному маршруті
   if (accessToken && isPublicRoute) {
-    return NextResponse.redirect(new URL('/profile', request.url));
+    return NextResponse.redirect(new URL('/', request.url));  // ← редірект на /, а не на /profile
   }
   
+  // Якщо немає accessToken, але є refreshToken — спроба поновлення
   if (!accessToken && refreshToken && isAuthRoute) {
     const newTokens = await refreshSession(refreshToken);
     if (newTokens) {
@@ -47,6 +50,7 @@ export async function proxy(request: NextRequest) {
     }
   }
   
+  // Якщо немає токенів і маршрут приватний
   if (!accessToken && !refreshToken && isAuthRoute) {
     return NextResponse.redirect(new URL('/sign-in', request.url));
   }
