@@ -1,17 +1,78 @@
 
+
+
+
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
 import { checkSession } from './lib/api/serverApi';
-import { parse } from 'cookie';
 
 const publicRoutes = ['/sign-in', '/sign-up'];
 const authRoutes = ['/profile', '/notes'];
 
+// Функція для точного зіставлення маршрутів
+function matchesRoute(pathname: string, routes: string[]): boolean {
+  return routes.some(route => pathname === route || pathname.startsWith(route + '/'));
+}
+
+// Інтерфейс для опцій cookie
+interface CookieOptions {
+  httpOnly: boolean;
+  secure: boolean;
+  sameSite: 'lax' | 'strict' | 'none';
+  expires?: Date;
+  path?: string;
+  maxAge?: number;
+}
+
+
+function parseCookieAttributes(cookieStr: string): { name: string; value: string; options: CookieOptions } {
+  const parts = cookieStr.split(';');
+  const [nameValue, ...attrParts] = parts;
+  const equalIndex = nameValue.indexOf('=');
+  const name = nameValue.substring(0, equalIndex);
+  const value = nameValue.substring(equalIndex + 1);
+  
+  const options: CookieOptions = {
+    httpOnly: true,
+    secure: true,
+    sameSite: 'lax',
+  };
+  
+  for (const attr of attrParts) {
+    const trimmedAttr = attr.trim();
+    const equalPos = trimmedAttr.indexOf('=');
+    let key: string;
+    let val: string;
+    
+    if (equalPos === -1) {
+      key = trimmedAttr.toLowerCase();
+      val = '';
+    } else {
+      key = trimmedAttr.substring(0, equalPos).toLowerCase();
+      val = trimmedAttr.substring(equalPos + 1);
+    }
+    
+    switch (key) {
+      case 'expires':
+        options.expires = new Date(val);
+        break;
+      case 'path':
+        options.path = val;
+        break;
+      case 'max-age':
+        options.maxAge = parseInt(val, 10);
+        break;
+    }
+  }
+  
+  return { name, value, options };
+}
+
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
   
-  const isPublicRoute = publicRoutes.some(route => pathname === route || pathname.startsWith(route));
-  const isAuthRoute = authRoutes.some(route => pathname === route || pathname.startsWith(route));
+  const isPublicRoute = matchesRoute(pathname, publicRoutes);
+  const isAuthRoute = matchesRoute(pathname, authRoutes);
   
   const cookieStore = await cookies();
   let accessToken = cookieStore.get('accessToken')?.value;
@@ -27,21 +88,12 @@ export async function proxy(request: NextRequest) {
       const response = NextResponse.next();
       
       for (const cookieStr of cookieArray) {
-        const parsed = parse(cookieStr);
-        const options = {
-          expires: parsed.Expires ? new Date(parsed.Expires) : undefined,
-          path: parsed.Path || '/',
-          maxAge: Number(parsed['Max-Age']),
-          httpOnly: true,
-          secure: true,
-          sameSite: 'lax' as const,
-        };
-        if (parsed.accessToken) {
-          response.cookies.set('accessToken', parsed.accessToken, options);
-          accessToken = parsed.accessToken;
-        }
-        if (parsed.refreshToken) {
-          response.cookies.set('refreshToken', parsed.refreshToken, options);
+        const { name, value, options } = parseCookieAttributes(cookieStr);
+        if (name === 'accessToken') {
+          response.cookies.set(name, value, options);
+          accessToken = value;
+        } else if (name === 'refreshToken') {
+          response.cookies.set(name, value, options);
         }
       }
       if (accessToken) return response;

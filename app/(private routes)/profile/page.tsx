@@ -34,6 +34,7 @@ export default async function ProfilePage() {
             width={120}
             height={120}
             className={css.avatar}
+             loading="eager"
           />
         </div>
         <div className={css.profileInfo}>
