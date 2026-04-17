@@ -1,22 +1,11 @@
 
-
-
 import { NextRequest, NextResponse } from 'next/server';
 import { cookies } from 'next/headers';
-import { api } from './app/api/api';
+import { checkSession } from './lib/api/serverApi';
 
 const publicRoutes = ['/sign-in', '/sign-up'];
 const authRoutes = ['/profile', '/notes'];
 const apiPublicRoutes = ['/api/auth/login', '/api/auth/register', '/api/auth/session'];
-
-async function refreshSession(refreshToken: string): Promise<{ accessToken: string; refreshToken: string } | null> {
-  try {
-    const response = await api.post('/auth/refresh', { refreshToken });
-    return response.data;
-  } catch {
-    return null;
-  }
-}
 
 export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
@@ -31,23 +20,28 @@ export async function proxy(request: NextRequest) {
   
   const cookieStore = await cookies();
   let accessToken = cookieStore.get('accessToken')?.value;
-  let refreshToken = cookieStore.get('refreshToken')?.value;
+  const refreshToken = cookieStore.get('refreshToken')?.value;
   
-  // Поновлення сесії для будь-якого маршруту (не тільки приватного)
-  // якщо немає accessToken, але є refreshToken
+  // Поновлення сесії через checkSession з serverApi
   if (!accessToken && refreshToken) {
-    const newTokens = await refreshSession(refreshToken);
-    if (newTokens) {
-      accessToken = newTokens.accessToken;
-      refreshToken = newTokens.refreshToken;
-      const response = NextResponse.next();
-      response.cookies.set('accessToken', accessToken, { httpOnly: true, secure: true, sameSite: 'lax' });
-      response.cookies.set('refreshToken', refreshToken, { httpOnly: true, secure: true, sameSite: 'lax' });
-      return response;
+    const sessionResponse = await checkSession();
+    if (sessionResponse && sessionResponse.data) {
+      // Отримуємо нові токени з відповіді
+      const newAccessToken = cookieStore.get('accessToken')?.value;
+      const newRefreshToken = cookieStore.get('refreshToken')?.value;
+      
+      if (newAccessToken) {
+        accessToken = newAccessToken;
+        const response = NextResponse.next();
+        if (newRefreshToken) {
+          response.cookies.set('refreshToken', newRefreshToken, { httpOnly: true, secure: true, sameSite: 'lax' });
+        }
+        return response;
+      }
     }
   }
   
-  // Якщо є accessToken, але користувач на публічному маршруті
+
   if (accessToken && isPublicRoute) {
     return NextResponse.redirect(new URL('/', request.url));
   }
